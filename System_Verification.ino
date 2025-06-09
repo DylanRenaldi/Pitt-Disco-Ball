@@ -83,14 +83,14 @@ void setupMatrixPins() {
   mxconfig.gpio.r2 = 14;
   mxconfig.gpio.g2 = 12;
   mxconfig.gpio.b2 = 13;
-  mxconfig.gpio.a  = 0;
+  mxconfig.gpio.a  = 16;
   mxconfig.gpio.b  = 2;
   mxconfig.gpio.c  = 32;
   mxconfig.gpio.clk = 18;
   mxconfig.gpio.lat = 4;
-  mxconfig.gpio.oe  = 15;
+  mxconfig.gpio.oe  = 22;
 }
-
+// --test--
 void setup() {
   setupMatrixPins();
   matrix.begin();
