@@ -24,7 +24,7 @@ uint16_t colors[] = {
   matrix.color565(255, 0, 255)
 };
 
-// --- Basic Radix-2 FFT implementation ---
+// --- Manual FFT implementation ---
 void simpleFFT(float *real, float *imag, int N) {
   int i, j, k, n, m;
   int M = log2(N);
