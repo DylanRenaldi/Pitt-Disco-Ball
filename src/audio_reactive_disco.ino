@@ -1,5 +1,5 @@
+#include <FastLED.h>
 #include <arduinoFFT.h>
-#include <Adafruit_NeoPixel.h>
 #include <driver/i2s.h>
 #include <math.h>
 #include "BluetoothSerial.h"
@@ -10,8 +10,8 @@
 #define MATRIX_WIDTH      32
 #define MATRIX_HEIGHT     32
 #define NUM_LEDS          (MATRIX_WIDTH * MATRIX_HEIGHT)
-#define MATRIX_PIN        5
-#define BRIGHTNESS        32
+#define DATA_PIN          5
+#define BRIGHTNESS        5
 
 #define SAMPLES           512
 #define SAMPLING_FREQ     48000
@@ -26,7 +26,7 @@
 // ========================
 // Globals
 // ========================
-Adafruit_NeoPixel matrix(NUM_LEDS, MATRIX_PIN, NEO_GRB + NEO_KHZ800);
+CRGB leds[NUM_LEDS];
 ArduinoFFT<double> FFT = ArduinoFFT<double>();
 double vReal[SAMPLES];
 double vImag[SAMPLES];
@@ -69,111 +69,91 @@ void setup() {
   Serial.begin(115200);
   setupI2S();
 
-  matrix.begin();
-  matrix.setBrightness(BRIGHTNESS);
-  matrix.show();
+  FastLED.addLeds<WS2812B, DATA_PIN, GRB>(leds, NUM_LEDS);
+  FastLED.setBrightness(BRIGHTNESS);
+  FastLED.clear();
+  FastLED.show();
 }
 
 // ========================
 // Main Loop
 // ========================
-int incoming = 0;
-int temp = 0;
+int incoming = 3350;
 
 void loop() {
   // Read Bluetooth input if available
-  if (ESP_BT.hasClient()) {
-    incoming = ESP_BT.read();
-    temp = incoming;
-  } else {
-    incoming = 3250; // Default fallback
+  if (ESP_BT.available() >= 2) {
+    uint8_t highByte = ESP_BT.read();
+    uint8_t lowByte = ESP_BT.read();
+    incoming = (highByte << 8) | lowByte;
   }
 
-  // Parse mode, color, and brightness
+  // Parse mode and color
   int mode = incoming / 1000;
-  int newBrightness = incoming % 100;
   int colorCode = (incoming % 1000) / 100;
 
-  matrix.setBrightness(newBrightness);
-
-  // Set color based on colorCode
   int r = 0, g = 0, b = 0;
   if (colorCode == 1) r = 255;
   else if (colorCode == 2) g = 255;
   else if (colorCode == 3) b = 255;
 
-  // ======= MODE HANDLING ========
   switch (mode) {
-
-    // -----------------------------
     case 1: // Static Color Fill
-    // -----------------------------
-      for (int i = 0; i < NUM_LEDS; i++) {
-        matrix.setPixelColor(i, matrix.Color(r, g, b));
-      }
-      matrix.show();
+      fill_solid(leds, NUM_LEDS, CRGB(r, g, b));
+      FastLED.show();
       break;
 
-    // -----------------------------
-    case 2: { // Dynamic - Horizontal Moving Line
-    // -----------------------------
+    case 2: { // Moving Horizontal Line
       static int frame = 0;
       static unsigned long lastUpdate = 0;
       unsigned long now = millis();
 
-      if (now - lastUpdate > 80) { // Adjust speed here
+      if (now - lastUpdate > 80) {
         lastUpdate = now;
+        fill_solid(leds, NUM_LEDS, CRGB::Black);
 
-        matrix.clear();
         int y = frame % MATRIX_HEIGHT;
-
         for (int x = 0; x < MATRIX_WIDTH; x++) {
           int i = xyToIndex(x, y);
-          matrix.setPixelColor(i, matrix.Color(r, g, b));
+          leds[i] = CRGB(r, g, b);
         }
 
-        matrix.show();
+        FastLED.show();
         frame++;
       }
       break;
     }
 
-    // -----------------------------
-    case 3: // Reactive FFT Visualizer
-    // -----------------------------
+    case 3: { // FFT Visualizer
       int32_t samples[SAMPLES];
       size_t bytes_read = 0;
 
-      // Read raw audio data from mic
       i2s_read(I2S_NUM_0, (char*)samples, SAMPLES * sizeof(int32_t), &bytes_read, portMAX_DELAY);
 
-      // Normalize & prepare for FFT
       for (int i = 0; i < SAMPLES; i++) {
         vReal[i] = (samples[i] >> 14) / 2048.0;
         vImag[i] = 0.0;
       }
 
-      // Perform FFT
       FFT.windowing(vReal, SAMPLES, FFTWindow::Hamming, FFTDirection::Forward);
       FFT.compute(vReal, vImag, SAMPLES, FFTDirection::Forward);
       FFT.complexToMagnitude(vReal, vImag, SAMPLES);
 
-      // Display the FFT results
       displayReactiveBands(vReal);
-      delay(30);
       break;
+    }
   }
 }
 
 // ========================
-// Show 32 vertical bars
+// Show 32 vertical bands
 // ========================
 void displayReactiveBands(double *magnitudes) {
-  matrix.clear();
+  fill_solid(leds, NUM_LEDS, CRGB::Black);
 
   int startBin = 1;
   for (int band = 0; band < 32; band++) {
-    int binCount = 2; // ~85 bins / 32 bands ≈ 2.6
+    int binCount = 2;
     int endBin = startBin + binCount;
 
     double sum = 0;
@@ -186,26 +166,45 @@ void displayReactiveBands(double *magnitudes) {
     int height = map((int)scaled, 0, 20, 0, MATRIX_HEIGHT);
     height = constrain(height, 0, MATRIX_HEIGHT);
 
-    // Light up from bottom
     for (int y = 0; y < height; y++) {
       int index = xyToIndex(band, MATRIX_HEIGHT - 1 - y);
-      matrix.setPixelColor(index, matrix.Color(0, 0, 255));
+      leds[index] = CRGB(0, 0, 255);
     }
 
     startBin = endBin + 1;
   }
 
-  matrix.show();
+  FastLED.show();
 }
 
 // ========================
 // Matrix Coordinate Mapping
 // ========================
 int xyToIndex(int x, int y) {
-  // Assumes zigzag/serpentine layout
-  if (y % 2 == 0) {
-    return y * MATRIX_WIDTH + x;
+  const int tileSize = 16;
+  int tileX = x / tileSize;         // 0 or 1
+  int tileY = y / tileSize;         // 0 or 1
+  int inTileX = x % tileSize;
+  int inTileY = y % tileSize;
+
+  int tileNumber;
+
+  // Serpentine layout: alternate row direction
+  if (tileY == 0) {
+    tileNumber = tileX;           // Top row: 0 (left), 1 (right)
   } else {
-    return y * MATRIX_WIDTH + (MATRIX_WIDTH - 1 - x);
+    tileNumber = 3 - tileX;       // Bottom row: 3 (left), 2 (right)
   }
+
+  int baseIndex = tileNumber * tileSize * tileSize;
+
+  // Serpentine within tile
+  int localIndex;
+  if (inTileY % 2 == 0) {
+    localIndex = inTileY * tileSize + inTileX;
+  } else {
+    localIndex = inTileY * tileSize + (tileSize - 1 - inTileX);
+  }
+
+  return baseIndex + localIndex;
 }
