@@ -36,7 +36,7 @@ void setup() {
 void loop() {
 
   
-  if(BRIGHT_UNPRESSED){
+  if(!BRIGHT_UNPRESSED){
 
     if(!digitalRead(INCREASE_BRIGHTNESS) && BRIGHTNESS < 255)    // GPIO27
       FastLED.setBrightness(++BRIGHTNESS);
@@ -47,7 +47,7 @@ void loop() {
     Serial.println(BRIGHTNESS);
   }
 
-  if(HEIGHT_UNPRESSED){
+  if(!HEIGHT_UNPRESSED){
 
     if(!digitalRead(INCREASE_HEIGHT) && HEIGHT < MATRIX_HEIGHT)    // GPIO0
       fhline(++HEIGHT - 1, CRGB(255,255,255));
