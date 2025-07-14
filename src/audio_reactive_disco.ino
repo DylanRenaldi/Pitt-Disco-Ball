@@ -105,7 +105,7 @@ int incoming = 3350;  // Default Bluetooth command value
 // Arduino main loop
 void loop() {
 
-  if(!digitalRead(INCREASE_BRIGHTNESS) && BRIGHTNESS < 255)    // GPIO27
+  if(!digitalRead(INCREASE_BRIGHTNESS) && BRIGHTNESS < 100)    // GPIO27
     FastLED.setBrightness(++BRIGHTNESS),Serial.println(BRIGHTNESS);
 
   else if (!digitalRead(DECREASE_BRIGHTNESS) && BRIGHTNESS)    // GPIO14
