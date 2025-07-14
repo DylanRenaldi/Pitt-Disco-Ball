@@ -35,7 +35,7 @@ BluetoothSerial ESP_BT;                // Bluetooth serial object
 double smoothedBands[32] = {0};        // Smoothed FFT band levels
 double noiseFloor[32] = {0.05};        // Adaptive noise floor per band
 int peakHeights[32] = {0};             // Peak level hold per band
-unsigned long lastPeakUpdate[32] = {0}; // Time of last peak update
+unsigned lastPeakUpdate[32] = {0}; // Time of last peak update
 const int peakHoldTime = 150;          // Time in ms to hold peak before decay
 const int peakFallSpeed = 1;           // Amount to reduce peak per update
 
@@ -81,8 +81,8 @@ void setup() {
 
   // define starting and ending level rgb values
   uint8_t rs = 0, // rgb values on lowest level
-          gs = 255,
-          bs = 0,
+          gs = 0,
+          bs = 125,
 
           rx = 255, // rgb values on upper-most level
           gx = 0,
@@ -111,7 +111,7 @@ void loop() {
   else if (!digitalRead(DECREASE_BRIGHTNESS) && BRIGHTNESS)    // GPIO14
     FastLED.setBrightness(--BRIGHTNESS),Serial.println(BRIGHTNESS);
 
-  static unsigned long lastFrame = 0;
+  static unsigned lastFrame = 0;
   const int frameInterval = 25; // Target ~40 FPS
   if (millis() - lastFrame < frameInterval) return;
   lastFrame = millis();
@@ -132,64 +132,66 @@ void loop() {
   else if (colorCode == 2) g = 255;
   else if (colorCode == 3) b = 255;
 
-  switch (mode) {
-    case 1:  // Solid color fill
-      fill_solid(leds, NUM_LEDS, CRGB(r, g, b));
-      FastLED.show();
-      break;
+  if (mode == 1) // Solid color fill
+    fill_solid(leds, NUM_LEDS, CRGB(r, g, b));
+  else if (mode == 2) {  // Moving horizontal bar animation
+    static int frame = 0;
+    fill_solid(leds, NUM_LEDS, CRGB::Black);
+    int y = frame % MATRIX_HEIGHT;
+    for (int x = 0; x < MATRIX_WIDTH; x++) {
+      leds[xyToIndex(x, y)] = CRGB(r, g, b);
+    }
+    
+    frame++;
+  } else if (mode == 3 ) {// Audio reactive FFT display
+    int32_t samples[SAMPLES];
+    size_t bytes_read = 0;
+    unsigned startMicros = micros(); // Track latency
 
-    case 2: {  // Moving horizontal bar animation
-      static int frame = 0;
-      fill_solid(leds, NUM_LEDS, CRGB::Black);
-      int y = frame % MATRIX_HEIGHT;
-      for (int x = 0; x < MATRIX_WIDTH; x++) {
-        leds[xyToIndex(x, y)] = CRGB(r, g, b);
-      }
-      FastLED.show();
-      frame++;
-      break;
+    i2s_read(I2S_NUM_0, (char*)samples, SAMPLES * sizeof(int32_t), &bytes_read, portMAX_DELAY);
+
+    // Convert raw I2S samples to normalized floats
+    for (int i = 0; i < SAMPLES; i++) {
+      vReal[i] = (samples[i] >> 14) / 2048.0;
+      vImag[i] = 0.0;
     }
 
-    case 3: {  // Audio reactive FFT display
-      int32_t samples[SAMPLES];
-      size_t bytes_read = 0;
-      unsigned long startMicros = micros(); // Track latency
+    // Apply windowing and perform FFT
+    FFT.windowing(vReal, SAMPLES, FFTWindow::Hamming, FFTDirection::Forward);
+    FFT.compute(vReal, vImag, SAMPLES, FFTDirection::Forward);
+    FFT.complexToMagnitude(vReal, vImag, SAMPLES);
 
-      i2s_read(I2S_NUM_0, (char*)samples, SAMPLES * sizeof(int32_t), &bytes_read, portMAX_DELAY);
-
-      // Convert raw I2S samples to normalized floats
-      for (int i = 0; i < SAMPLES; i++) {
-        vReal[i] = (samples[i] >> 14) / 2048.0;
-        vImag[i] = 0.0;
-      }
-
-      // Apply windowing and perform FFT
-      FFT.windowing(vReal, SAMPLES, FFTWindow::Hamming, FFTDirection::Forward);
-      FFT.compute(vReal, vImag, SAMPLES, FFTDirection::Forward);
-      FFT.complexToMagnitude(vReal, vImag, SAMPLES);
-
-      // Suppress vocal range (300–3400 Hz)
-      for (int i = 3; i < 36 && i < SAMPLES / 2; i++) {
-        vReal[i] *= 0.2;  // Reduce vocal band magnitude
-      }
-
-      // Display FFT result
-      displayReactiveBands(vReal);
-
-      // Print latency
-     //unsigned long endMicros = micros();
-      //Serial.print("Audio-to-LED Latency: ");
-      //Serial.print(endMicros - startMicros);
-      //Serial.println(" us");
-      break;
+    // Suppress vocal range (300–3400 Hz)
+    for (int i = 3; i < 36 && i < SAMPLES / 2; i++) {
+      vReal[i] *= 0.2;  // Reduce vocal band magnitude
     }
+
+    static unsigned curIter,iterations = 0,lastIter = 0,total = 0;
+    curIter = micros();
+
+    total += displayReactiveBands(vReal);
+    ++iterations;
+
+	// print quantity of LEDs active on system every 1 second
+    if (curIter - lastIter > 1000000) {   // 1 second
+      Serial.println(total/iterations);
+      total = iterations = 0;
+      lastIter = curIter;
+    }
+
+    // Print latency
+    //unsigned endMicros = micros();
+    //Serial.print("Audio-to-LED Latency: ");
+    //Serial.print(endMicros - startMicros);
+    //Serial.println(" us");
   }
 
   FastLED.show();
 }
 
 // Visualize FFT result on LED matrix
-void displayReactiveBands(double *magnitudes) {
+unsigned displayReactiveBands(double *magnitudes) {
+
   for (int i = 0; i < NUM_LEDS; i++) {
     leds[i].fadeToBlackBy(40);  // Fading trail effect
   }
@@ -200,7 +202,7 @@ void displayReactiveBands(double *magnitudes) {
     37, 43, 50, 58, 67, 77, 89, 103, 119, 137, 158, 182, 209, 239, 273, 311, 352
   };
 
-  unsigned long now = millis();
+  unsigned now = millis(), quantity = 0;
   for (int band = 0; band < 32; band++) {
     int startBin = logBins[band];
     int endBin = logBins[band + 1];
@@ -228,6 +230,7 @@ void displayReactiveBands(double *magnitudes) {
 
     int height = map((int)scaled, 0, 20, 0, MATRIX_HEIGHT);
     height = constrain(height, 0, MATRIX_HEIGHT);
+    quantity += height;
 
     // Peak hold logic
     if (height >= peakHeights[band]) {
@@ -256,7 +259,7 @@ void displayReactiveBands(double *magnitudes) {
     }
   }
 
-  FastLED.show();  // Push LED buffer to display
+  return quantity;
 }
 
 // Converts 2D matrix coordinates to 1D LED index for 4-tile layout
