@@ -1,0 +1,419 @@
+#include <FastLED.h>                // Library to control WS2812B LED matrix
+#include <arduinoFFT.h>            // Library for performing FFT (Fast Fourier Transform)
+#include <driver/i2s.h>            // I2S driver for audio input on ESP32
+#include <math.h>
+#include "BluetoothSerial.h"       // Bluetooth communication for control
+
+// LED Matrix configuration
+#define MATRIX_WIDTH      32      // Width of LED panel
+#define MATRIX_HEIGHT     32      // Height of LED panel
+#define NUM_LEDS          (MATRIX_WIDTH * MATRIX_HEIGHT)  // Total number of LEDs
+#define DATA_PIN          5       // Pin connected to the LED strip
+#define BRIGHTNESS        5       // Default brightness (out of 255, so this is low)
+
+// FFT and audio sampling configuration
+#define SAMPLES           512
+#define SAMPLING_FREQ     48000    // Sampling frequency for audio input
+
+// GPIO pins for adjusting brightness and visualization height (optional)
+#define INC_BRIGHT        27
+#define DEC_BRIGHT        14
+#define INC_HEIGHT        0
+#define DEC_HEIGHT        2
+
+// I2S configuration pins
+#define I2S_WS            25
+#define I2S_SD            33
+#define I2S_SCK           26
+
+// Global LED and FFT variables
+CRGB leds[NUM_LEDS];
+ArduinoFFT<double> FFT;
+double vReal[SAMPLES];            // Real part of the FFT input
+double vImag[SAMPLES];            // Imaginary part (initialized to 0)
+int xyIndexTable[MATRIX_HEIGHT][MATRIX_WIDTH];
+
+
+// Bluetooth serial for remote control
+BluetoothSerial ESP_BT;
+
+// Audio visualization variables
+double smoothedBands[32] = {0};   // Smoothed FFT magnitudes for each band
+double noiseFloor[32] = {0.05};   // Dynamic noise floor per band
+int peakHeights[32] = {0};        // Keeps track of peak levels per band
+unsigned long lastPeakUpdate[32] = {0};
+const int peakHoldTime = 150;     // Hold time for peaks in milliseconds
+const int peakFallSpeed = 1;      // How fast the peak indicator drops
+
+int logBins[33];                  // Frequency bin edges for logarithmic scaling
+
+// Beat detection variables
+double prevLowEnergy = 0;
+unsigned long lastBeatTime = 0;
+int estimatedBPM = 120;           // Estimated beats per minute
+int dynamicFrameInterval = 25;    // Controls how frequently LED updates (adaptive)
+
+// Calculate logarithmic bin edges for frequency bands
+void computeLogBins(int *logBins, int numBands, int sampleRate, int fftSize) {
+  double minFreq = 43.0;                        // Minimum frequency of interest
+  double maxFreq = sampleRate / 2.0;            // Nyquist frequency
+  for (int i = 0; i <= numBands; i++) {
+    double fraction = (double)i / numBands;
+    double freq = minFreq * pow(maxFreq / minFreq, fraction); // Log scale
+    int bin = round(freq / (sampleRate / (double)fftSize));   // Convert to bin index
+    logBins[i] = constrain(bin, 1, fftSize / 2 - 1);
+  }
+}
+
+// Configure I2S audio input
+void setupI2S() {
+  i2s_config_t i2s_config = {
+    .mode = i2s_mode_t(I2S_MODE_MASTER | I2S_MODE_RX),
+    .sample_rate = SAMPLING_FREQ,
+    .bits_per_sample = I2S_BITS_PER_SAMPLE_32BIT,
+    .channel_format = I2S_CHANNEL_FMT_ONLY_LEFT,
+    .communication_format = i2s_comm_format_t(I2S_COMM_FORMAT_I2S),
+    .intr_alloc_flags = ESP_INTR_FLAG_LEVEL1,
+    .dma_buf_count = 4,
+    .dma_buf_len = 256,
+    .use_apll = false
+  };
+
+  i2s_pin_config_t pin_config = {
+    .bck_io_num = I2S_SCK,
+    .ws_io_num = I2S_WS,
+    .data_out_num = I2S_PIN_NO_CHANGE,
+    .data_in_num = I2S_SD
+  };
+
+  i2s_driver_install(I2S_NUM_0, &i2s_config, 0, NULL);
+  i2s_set_pin(I2S_NUM_0, &pin_config);
+  i2s_zero_dma_buffer(I2S_NUM_0);
+}
+
+// Initialize system
+void setup() {
+  setupXYTable();
+  ESP_BT.begin("ESP-Controller");    // Start Bluetooth for control input
+  Serial.begin(115200);
+  setupI2S();                        // Initialize audio input
+  FastLED.addLeds<WS2812B, DATA_PIN, GRB>(leds, NUM_LEDS);
+  FastLED.setBrightness(BRIGHTNESS);
+  FastLED.clear();
+  FastLED.show();
+
+  computeLogBins(logBins, 32, SAMPLING_FREQ, SAMPLES);  // Precompute log bins
+}
+
+int incoming = 3350; // Default mode and color input value
+String incomingData = "";
+// Main loop
+void loop() {
+  static unsigned long lastFrame = 0;
+  if (millis() - lastFrame < dynamicFrameInterval) return;
+  lastFrame = millis();
+
+  // Read incoming Bluetooth command
+  while(ESP_BT.available()){
+    char c = ESP_BT.read();
+    if (c == '\n') {
+      incoming = incomingData.toInt();
+      incomingData = "";
+    }else{
+      incomingData += c;
+    }
+  }
+
+  // Parse control command
+  int mode = incoming / 1000;
+  int colorCode = (incoming % 1000) / 100;
+
+  // Map color code to RGB values
+  int r = 0, g = 0, b = 0;
+  if (colorCode == 1) r = 255;
+  else if (colorCode == 2) g = 255;
+  else if (colorCode == 3) b = 255;
+
+  // Handle different display modes
+  switch (mode) {
+    case 1:
+      // Solid color fill
+      fill_solid(leds, NUM_LEDS, CRGB(r, g, b));
+      FastLED.show();
+      break;
+
+    case 2: {
+      // Mode 2: Color Wave
+      static int offset = 0;
+      for (int y = 0; y < MATRIX_HEIGHT; y++) {
+        for (int x = 0; x < MATRIX_WIDTH; x++) {
+          float wave = sin((x + offset) * 0.3 + millis() * 0.005);
+          uint8_t brightness = map(wave * 100, -100, 100, 50, 255);
+          leds[xyToIndex(x, y)] = CHSV((x * 10 + offset) % 255, 255, brightness);
+        }
+      }
+      FastLED.show();
+      offset++;
+      break;
+    }
+
+    case 3: {
+      // Audio reactive FFT visualization
+      int32_t samples[SAMPLES];
+      size_t bytes_read = 0;
+
+      // Read audio samples from I2S
+      i2s_read(I2S_NUM_0, (char*)samples, SAMPLES * sizeof(int32_t), &bytes_read, portMAX_DELAY);
+
+      // Convert raw samples to floating-point and prepare for FFT
+      for (int i = 0; i < SAMPLES; i++) {
+        vReal[i] = (samples[i] >> 14) / 2048.0;  // Normalize
+        vImag[i] = 0.0;
+      }
+
+      // Apply FFT
+      FFT.windowing(vReal, SAMPLES, FFTWindow::Hamming, FFTDirection::Forward);
+      FFT.compute(vReal, vImag, SAMPLES, FFTDirection::Forward);
+      FFT.complexToMagnitude(vReal, vImag, SAMPLES);
+
+      // Attenuate high-frequency bins
+      for (int i = 3; i < 36 && i < SAMPLES / 2; i++) {
+        vReal[i] *= 0.2;
+      }
+
+      // Beat detection from low-frequency energy
+      double lowFreqEnergy = 0;
+      for (int i = 1; i <= 10; i++) {
+        lowFreqEnergy += vReal[i];
+      }
+      lowFreqEnergy /= 10.0;
+
+      unsigned long now = millis();
+      if (lowFreqEnergy > prevLowEnergy * 1.5 && now - lastBeatTime > 300) {
+        // Beat detected
+        unsigned long interval = now - lastBeatTime;
+        lastBeatTime = now;
+        estimatedBPM = 60000 / interval;
+        dynamicFrameInterval = constrain(interval / 4, 15, 60);  // Adapt update rate
+      }
+
+      // Smooth energy to avoid jitter
+      prevLowEnergy = 0.8 * prevLowEnergy + 0.2 * lowFreqEnergy;
+
+      // Visualize the FFT bands on the LED matrix
+      displayReactiveBands(vReal);
+      break;
+    }
+
+    case 4: {
+      // Mode 4: Pulse in sync with low frequencies
+      int32_t samples[SAMPLES];
+      size_t bytes_read = 0;
+
+      // Read samples from I2S
+      i2s_read(I2S_NUM_0, (char*)samples, SAMPLES * sizeof(int32_t), &bytes_read, portMAX_DELAY);
+
+      // Prepare for FFT
+      for (int i = 0; i < SAMPLES; i++) {
+        vReal[i] = (samples[i] >> 14) / 2048.0;
+        vImag[i] = 0.0;
+      }
+
+      FFT.windowing(vReal, SAMPLES, FFTWindow::Hamming, FFTDirection::Forward);
+      FFT.compute(vReal, vImag, SAMPLES, FFTDirection::Forward);
+      FFT.complexToMagnitude(vReal, vImag, SAMPLES);
+
+      // Compute low frequency average
+      double lowEnergy = 0;
+      for (int i = 1; i <= 10; i++) {
+        lowEnergy += vReal[i];
+      }
+      lowEnergy /= 10.0;
+
+      // Smooth the pulse to avoid flickering
+      static double smoothed = 0;
+      smoothed = 0.8 * smoothed + 0.2 * lowEnergy;
+
+      // Map to brightness or saturation
+      uint8_t pulseVal = constrain(smoothed * 100, 10, 255);
+      CRGB color = CHSV((millis() / 10) % 255, 255, pulseVal);
+
+      fill_solid(leds, NUM_LEDS, color);
+      FastLED.show();
+      break;
+    }
+
+
+    case 5: {
+      // Mode 5: Ripple Beat
+      static int rippleRadius = -1;
+      static unsigned long rippleTime = 0;
+
+      if (millis() - rippleTime > 300 && prevLowEnergy * 1.5 < vReal[2]) {
+        rippleRadius = 0;
+        rippleTime = millis();
+      }
+
+      fill_solid(leds, NUM_LEDS, CRGB::Black);
+      if (rippleRadius >= 0) {
+        for (int y = 0; y < MATRIX_HEIGHT; y++) {
+          for (int x = 0; x < MATRIX_WIDTH; x++) {
+            int dx = x - MATRIX_WIDTH / 2;
+            int dy = y - MATRIX_HEIGHT / 2;
+            int dist = sqrt(dx * dx + dy * dy);
+            if (dist == rippleRadius) {
+              leds[xyToIndex(x, y)] = CHSV((millis() / 5) % 255, 255, 255);
+            }
+          }
+        }
+        rippleRadius++;
+        if (rippleRadius > max(MATRIX_WIDTH, MATRIX_HEIGHT)) rippleRadius = -1;
+      }
+      FastLED.show();
+      break;
+    }
+
+    case 6: {
+      // Mode 6: Fire Glow (bass-driven flicker)
+      for (int y = 0; y < MATRIX_HEIGHT; y++) {
+        for (int x = 0; x < MATRIX_WIDTH; x++) {
+          float bass = vReal[2] * 10;
+          uint8_t heat = random8(constrain((int)(bass * 255), 30, 255));
+          leds[xyToIndex(x, y)] = CHSV(map(heat, 0, 255, 0, 40), 255, heat);
+        }
+      }
+      FastLED.show();
+      break;
+    }
+
+    case 7: {
+      // Mode 7: Energy Snake
+      static int headX = 0;
+      static int direction = 1;
+      double amp = 0;
+      for (int i = 3; i < 10; i++) amp += vReal[i];
+      amp /= 7.0;
+      int trailLength = constrain((int)(amp * 10), 1, MATRIX_WIDTH);
+
+      fill_solid(leds, NUM_LEDS, CRGB::Black);
+      for (int t = 0; t < trailLength; t++) {
+        int x = headX - t * direction;
+        if (x >= 0 && x < MATRIX_WIDTH) {
+          for (int y = 0; y < MATRIX_HEIGHT; y++) {
+            leds[xyToIndex(x, y)] = CHSV((millis() / 5 + y * 5) % 255, 255, 255 - t * 20);
+          }
+        }
+      }
+
+      headX += direction;
+      if (headX >= MATRIX_WIDTH || headX < 0) {
+        direction *= -1;
+        headX += direction;
+      }
+
+      FastLED.show();
+      break;
+    }
+  }
+}
+
+// Visualize audio frequency bands as vertical bars with peak indicators
+void displayReactiveBands(double *magnitudes) {
+  // Dim all LEDs for trail effect
+  for (int i = 0; i < NUM_LEDS; i++) {
+    leds[i].fadeToBlackBy(40);
+  }
+
+  unsigned long now = millis();
+  for (int band = 0; band <32; band++) {
+    int startBin = logBins[band];
+    int endBin = logBins[band + 1];
+    int binCount = endBin - startBin;
+
+    // Average the magnitudes in the band
+    double sum = 0;
+    for (int i = startBin; i < endBin && i < SAMPLES / 2; i++) {
+      sum += magnitudes[i];
+    }
+    double avg = sum / binCount;
+
+    // Adjust noise floor dynamically
+    if (avg < noiseFloor[band]) {
+      noiseFloor[band] = noiseFloor[band] * 0.95 + avg * 0.05;
+    } else {
+      noiseFloor[band] = noiseFloor[band] * 0.9995 + avg * 0.0005;
+    }
+
+    double adjusted = avg - noiseFloor[band];
+    if (adjusted < 0) adjusted = 0;
+
+    smoothedBands[band] = 0.7 * smoothedBands[band] + 0.3 * adjusted;
+
+    // Convert to visual height
+    double scaled = log10(smoothedBands[band] + 1) * 10;
+    int height = map((int)scaled, 0, 20, 0, MATRIX_HEIGHT);
+    height = constrain(height, 0, MATRIX_HEIGHT);
+
+    // Update peak height
+    if (height >= peakHeights[band]) {
+      peakHeights[band] = height;
+      lastPeakUpdate[band] = now;
+    } else if (now - lastPeakUpdate[band] > peakHoldTime) {
+      peakHeights[band] = max(0, peakHeights[band] - peakFallSpeed);
+    }
+
+    // Draw bar and peak
+    uint8_t hue = map(height, 0, MATRIX_HEIGHT, 160, 0);
+    CRGB barColor = CHSV(hue, 255, 255);
+    int flippedBand = 15 - band;  // Flip for visual symmetry
+
+    for (int y = 0; y < height; y++) {
+      int index = xyToIndex(flippedBand, MATRIX_HEIGHT - 1 - y);
+      leds[index] = barColor;
+    }
+
+    if (peakHeights[band] > 0) {
+      int peakY = MATRIX_HEIGHT - 1 - peakHeights[band];
+      int peakIndex = xyToIndex(flippedBand, peakY);
+      leds[peakIndex] = CRGB::White;
+    }
+  }
+
+  FastLED.show();
+}
+
+// Convert (x, y) coordinate to 1D LED index based on matrix layout
+inline int xyToIndex(int x, int y) {
+  return xyIndexTable[y][x];
+}
+
+void setupXYTable() {
+  for (int y = 0; y < MATRIX_HEIGHT; y++) {
+    for (int x = 0; x < MATRIX_WIDTH; x++) {
+      const int tileSize = 16;
+      int tileX = x / tileSize;
+      int tileY = y / tileSize;
+      int inTileX = x % tileSize;
+      int inTileY = y % tileSize;
+
+      int tileNumber;
+      if (tileY == 0) {
+        tileNumber = tileX;
+      } else {
+        tileNumber = 3 - tileX;
+      }
+
+      int baseIndex = tileNumber * tileSize * tileSize;
+      int localIndex;
+
+      // Zigzag wiring handling
+      if (inTileY % 2 == 0) {
+        localIndex = inTileY * tileSize + inTileX;
+      } else {
+        localIndex = inTileY * tileSize + (tileSize - 1 - inTileX);
+      }
+
+      xyIndexTable[y][x] = baseIndex + localIndex;
+    }
+  }
+}
