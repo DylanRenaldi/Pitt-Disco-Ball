@@ -9,17 +9,15 @@
 #define MATRIX_HEIGHT     32      // Height of LED panel
 #define NUM_LEDS          (MATRIX_WIDTH * MATRIX_HEIGHT)  // Total number of LEDs
 #define DATA_PIN          5       // Pin connected to the LED strip
-#define BRIGHTNESS        5       // Default brightness (out of 255, so this is low)
-
+uint8_t BRIGHTNESS = 5,       // Default brightness (out of 255, so this is low)
+        BRIGHT_UNPRESSED  = 1;
 // FFT and audio sampling configuration
 #define SAMPLES           512
 #define SAMPLING_FREQ     48000    // Sampling frequency for audio input
 
 // GPIO pins for adjusting brightness and visualization height (optional)
-#define INC_BRIGHT        27
-#define DEC_BRIGHT        14
-#define INC_HEIGHT        0
-#define DEC_HEIGHT        2
+#define INCREASE_BRIGHTNESS        27
+#define DECREASE_BRIGHTNESS        14
 
 // I2S configuration pins
 #define I2S_WS            25
@@ -45,7 +43,10 @@ unsigned long lastPeakUpdate[32] = {0};
 const int peakHoldTime = 150;     // Hold time for peaks in milliseconds
 const int peakFallSpeed = 1;      // How fast the peak indicator drops
 
-int logBins[33];                  // Frequency bin edges for logarithmic scaling
+int logBins[33] = {
+    1, 2, 3, 4, 5, 6, 7, 9, 11, 13, 15, 18, 21, 24, 28, 32,
+    37, 43, 50, 58, 67, 77, 89, 103, 119, 137, 158, 182, 209, 239, 273, 311, 352
+  };                  // Frequency bin edges for logarithmic scaling
 
 // Beat detection variables
 double prevLowEnergy = 0;
@@ -101,14 +102,30 @@ void setup() {
   FastLED.setBrightness(BRIGHTNESS);
   FastLED.clear();
   FastLED.show();
+  pinMode(INCREASE_BRIGHTNESS, INPUT_PULLUP);
+  pinMode(DECREASE_BRIGHTNESS, INPUT_PULLUP);
 
-  computeLogBins(logBins, 32, SAMPLING_FREQ, SAMPLES);  // Precompute log bins
+  BRIGHT_UNPRESSED = micros();
+
+  //computeLogBins(logBins, 32, SAMPLING_FREQ, SAMPLES);  // Precompute log bins
 }
 
 int incoming = 3350; // Default mode and color input value
 String incomingData = "";
 // Main loop
 void loop() {
+  if(micros() - BRIGHT_UNPRESSED > 100000){
+    BRIGHT_UNPRESSED = micros();
+    
+    if(!digitalRead(INCREASE_BRIGHTNESS) && BRIGHTNESS < 100)    // GPIO27
+      FastLED.setBrightness(++BRIGHTNESS);
+
+    else if (!digitalRead(DECREASE_BRIGHTNESS) && BRIGHTNESS)    // GPIO14
+      FastLED.setBrightness(--BRIGHTNESS);
+      
+    Serial.println(BRIGHTNESS);
+  }
+
   static unsigned long lastFrame = 0;
   if (millis() - lastFrame < dynamicFrameInterval) return;
   lastFrame = millis();
@@ -139,6 +156,9 @@ void loop() {
     case 1:
       // Solid color fill
       fill_solid(leds, NUM_LEDS, CRGB(r, g, b));
+      if(BRIGHTNESS>100){
+        BRIGHTNESS = 100;
+      }
       FastLED.show();
       break;
 
@@ -151,6 +171,9 @@ void loop() {
           uint8_t brightness = map(wave * 100, -100, 100, 50, 255);
           leds[xyToIndex(x, y)] = CHSV((x * 10 + offset) % 255, 255, brightness);
         }
+      }
+      if(BRIGHTNESS>100){
+        BRIGHTNESS = 100;
       }
       FastLED.show();
       offset++;
@@ -239,6 +262,9 @@ void loop() {
       CRGB color = CHSV((millis() / 10) % 255, 255, pulseVal);
 
       fill_solid(leds, NUM_LEDS, color);
+      if(BRIGHTNESS>100){
+        BRIGHTNESS = 100;
+      }
       FastLED.show();
       break;
     }
@@ -269,6 +295,9 @@ void loop() {
         rippleRadius++;
         if (rippleRadius > max(MATRIX_WIDTH, MATRIX_HEIGHT)) rippleRadius = -1;
       }
+      if(BRIGHTNESS>100){
+        BRIGHTNESS = 100;
+      }
       FastLED.show();
       break;
     }
@@ -281,6 +310,9 @@ void loop() {
           uint8_t heat = random8(constrain((int)(bass * 255), 30, 255));
           leds[xyToIndex(x, y)] = CHSV(map(heat, 0, 255, 0, 40), 255, heat);
         }
+      }
+      if(BRIGHTNESS>100){
+        BRIGHTNESS = 100;
       }
       FastLED.show();
       break;
@@ -311,6 +343,9 @@ void loop() {
         headX += direction;
       }
 
+      if(BRIGHTNESS>100){
+        BRIGHTNESS = 100;
+      }
       FastLED.show();
       break;
     }
@@ -365,7 +400,7 @@ void displayReactiveBands(double *magnitudes) {
     // Draw bar and peak
     uint8_t hue = map(height, 0, MATRIX_HEIGHT, 160, 0);
     CRGB barColor = CHSV(hue, 255, 255);
-    int flippedBand = 15 - band;  // Flip for visual symmetry
+    int flippedBand = 31 - band;  // Flip for visual symmetry
 
     for (int y = 0; y < height; y++) {
       int index = xyToIndex(flippedBand, MATRIX_HEIGHT - 1 - y);
@@ -378,7 +413,9 @@ void displayReactiveBands(double *magnitudes) {
       leds[peakIndex] = CRGB::White;
     }
   }
-
+  if(BRIGHTNESS>100){
+    BRIGHTNESS = 100;
+  }
   FastLED.show();
 }
 
