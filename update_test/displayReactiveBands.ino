@@ -1,7 +1,7 @@
 // is marginally more efficient, but mainly (hopefully) resolves the peak marker stopping before the lowest bin
 
-scaled = constrain(scaled, 0, MATRIX_HEIGHT);
-int height = map((int)scaled, 0, 20, 1, MATRIX_HEIGHT);
+int height = map((int)scaled, 0, 20, 1, MATRIX_HEIGHT);  
+height = constrain(height, 0, MATRIX_HEIGHT);
 if(height==1 && !peakHeights[band]) continue;
 
 quantity += height - 1;
