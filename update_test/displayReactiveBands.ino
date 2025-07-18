@@ -1,3 +1,5 @@
+// is marginally more efficient, but mainly (hopefully) resolves the peak marker stopping before the lowest bin
+
 scaled = constrain(scaled, 0, MATRIX_HEIGHT);
 int height = map((int)scaled, 0, 20, 1, MATRIX_HEIGHT);
 if(height==1 && !peakHeights[band]) continue;
@@ -29,6 +31,6 @@ for (int y = 1, index; y < height; y++) {
 }
 
 // Draw peak marker
-int peakY = MATRIX_HEIGHT - peakHeights[band] - 1;
+int peakY = MATRIX_HEIGHT - peakHeights[band];
 int peakIndex = xyToIndex(flippedBand, peakY);
 leds[peakIndex] = CRGB::White;
