@@ -35,10 +35,10 @@ double vReal[SAMPLES];                        // Real part of FFT input
 double vImag[SAMPLES]{};                      // Imaginary part of FFT input
 
 // Visualization state
-double smoothedBands[32] = {0};        // Smoothed FFT band levels
-double noiseFloor[32] = {0.05};        // Adaptive noise floor per band
-// int peakHeights[32] = {0};             // Peak level hold per band
-// unsigned lastPeakUpdate[32] = {0};     // Time of last peak update
+double smoothedBands[MATRIX_WIDTH] = {0};        // Smoothed FFT band levels
+double noiseFloor[MATRIX_WIDTH] = {0.05};        // Adaptive noise floor per band
+// int peakHeights[MATRIX_WIDTH] = {0};             // Peak level hold per band
+// unsigned lastPeakUpdate[MATRIX_WIDTH] = {0};     // Time of last peak update
 // const int peakHoldTime = 150;          // Time in ms to hold peak before decay
 // const int peakFallSpeed = 1;           // Amount to reduce peak per update
 
@@ -149,7 +149,7 @@ void loop() {
 void displayWaveform(double *values) {
 
   // Logarithmically spaced frequency bands
-  static const int logBins[33] = {
+  static const int logBins[MATRIX_WIDTH + 1] = {
     1, 2, 3, 4, 5, 6, 7, 9, 11, 13, 15, 18, 21, 24, 28, 32,                           // vocal range (300 Hz - 3400 Hz)
     37, 43, 50, 58, 67, 77, 89, 103, 119, 137, 158, 182, 209, 239, 273, 311, 352
   };
@@ -190,7 +190,7 @@ void displayWaveform(double *values) {
     // Color mapping based on height
     //uint8_t hue = map(height, 0, MATRIX_HEIGHT, 160, 0);
     //CRGB barColor = CHSV(hue, 255, 255);
-    int flippedBand = 31 - band;  // Flip horizontally for visual symmetry
+    int flippedBand = MATRIX_WIDTH - band - 1;  // Flip horizontally for visual symmetry
 
     // Draw vertical bar (starting 1 because height map is 1-offset)
     for (int y = 1, index; y < height; y++) {
