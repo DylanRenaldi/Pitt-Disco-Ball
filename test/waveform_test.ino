@@ -91,32 +91,29 @@ void setup() {
 // Arduino main loop
 void loop() {
 
-  static int debounce = 0;
+  static uint8_t debounce = 0;
 
-  if (!debounce) {
-    int b = BRIGHTNESS;
-    if (!digitalRead(INCREASE_BRIGHTNESS) && BRIGHTNESS < 100)    // GPIO27
+  if(!debounce) {
+    uint8_t b = BRIGHTNESS;
+    if(!digitalRead(INCREASE_BRIGHTNESS) && BRIGHTNESS < 100)    // GPIO27
       FastLED.setBrightness(++BRIGHTNESS);
- 
-    else if (!digitalRead(DECREASE_BRIGHTNESS) && BRIGHTNESS)     // GPIO14
+
+    else if (!digitalRead(DECREASE_BRIGHTNESS) && BRIGHTNESS)    // GPIO14
       FastLED.setBrightness(--BRIGHTNESS);
 
-    if (b != BRIGHTNESS) {    // if brightness was updated
-      debounce = 100;         // 100 ms
+    if(b != BRIGHTNESS){
       Serial.println(BRIGHTNESS);
+      debounce = 100;
     }
   }
 
   static unsigned lastFrame = 0, diff;
-  const int frameInterval = 25; // Target ~40 FPS
+  const int frameInterval = 25;           // Target ~40 FPS
 
-  diff = millis() - lastFrame;  // save diff because it may change in midst of below comparison and cause erroneous error
-
-  if(debounce != 100) {         // if a button wasn't just pressed (diff shouldn't be compared until next loop)
-    debounce -= (debounce >= diff ? diff : debounce);
-  } else --debounce;
+  diff = millis() - lastFrame;            // save diff because it may change in midst of below comparison and cause an erroneous error
 
   if (diff < frameInterval) return;
+  debounce -= (debounce >= diff ? diff : debounce);     // only change debounce after frameInterval (otherwise, debounce will be compoundingly reduced at the clock rate)
   lastFrame = millis();
 
   // Audio reactive FFT display
@@ -210,11 +207,13 @@ void displayWaveform(double *values) {
 
 }
 
-void gradient(CRGB *dest, CRGB begin, CRGB end){
+void gradient(CRGB *out, CRGB begin, CRGB end){
 
-  // delta crgb value between lowest and upper-most level
-  CRGB delta = (end - begin)/(MATRIX_HEIGHT - 1);
+  float dr = float(end.r - begin.r)/(MATRIX_HEIGHT - 1),
+        dg = float(end.g - begin.g)/(MATRIX_HEIGHT - 1),
+        db = float(end.b - begin.b)/(MATRIX_HEIGHT - 1);  
 
-  for(uint8_t i = 0; i < MATRIX_HEIGHT; ++i, begin += delta)
-    dest[i] = begin;
+  // last color doesn't matter (if unsigned overflow) because of peak marker
+  for(uint8_t i = 0; i < MATRIX_HEIGHT; ++i, begin.r += dr, begin.g += dg, begin.b += db)
+    out[i] = begin;
 }
