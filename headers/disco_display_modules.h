@@ -1,6 +1,15 @@
 
+#pragma once
+
+// Visualization state
+double smoothedBands[MATRIX_WIDTH]    = {0};        // Smoothed FFT band levels
+double noiseFloor[MATRIX_WIDTH]       = {0.05};     // Adaptive noise floor per band
+int peakHeights[MATRIX_WIDTH]         = {0};        // Peak level hold per band
+unsigned lastPeakUpdate[MATRIX_WIDTH] = {0};        // Time of last peak update
+
+
 // Visualize FFT result on LED matrix
-unsigned displayReactiveBands(double *magnitudes) {
+unsigned displayReactiveBands(double *magnitudes, CRGB peakColor, CRGB *leds) {
 
   // Logarithmically spaced frequency bands
   static const auto logBins = logspace(1, SAMPLES/2, MATRIX_WIDTH + 1);
@@ -53,7 +62,7 @@ unsigned displayReactiveBands(double *magnitudes) {
     // Draw peak marker
     int peakY = MATRIX_HEIGHT - peakHeights[band];
     int peakIndex = xyToIndex(flippedBand, peakY);
-    leds[peakIndex] = CRGB::Pink;
+    leds[peakIndex] = peakColor;
   }
   
   for (int i = 0; i < NUM_LEDS; i++) {
@@ -65,7 +74,7 @@ unsigned displayReactiveBands(double *magnitudes) {
 
 
 // Visualize FFT result on LED matrix
-void displayWaveform(double *values) {
+void displayWaveform(double *magnitudes, CRGB peakColor, CRGB *leds) {
 
   // Logarithmically spaced frequency bands
   static const auto logBins = logspace(1, SAMPLES/2, MATRIX_WIDTH + 1);
@@ -78,7 +87,7 @@ void displayWaveform(double *values) {
 
     double sum = 0;
     for (int i = startBin; i < endBin; i++) {
-      sum += values[i];
+      sum += magnitudes[i];
     }
 
     double avg = sum / binCount;
@@ -112,7 +121,7 @@ void displayWaveform(double *values) {
     // Draw vertical bar (starting 1 because height map is 1-offset)
     for (int y = 1, index; y < height; y++) {
       index = xyToIndex(band, MATRIX_HEIGHT - y);
-      leds[index] = colors[y - 1];
+      leds[index] = CRGB::Aqua; // colors[y - 1];
     }
 
     // Draw peak marker
@@ -125,7 +134,7 @@ void displayWaveform(double *values) {
 
 
 // Visualize FFT result on LED matrix
-unsigned displayWaveSpectrum(double *magnitudes) {
+unsigned displayWaveSpectrum(double *magnitudes, CRGB peakColor, CRGB *leds) {
 
   // Logarithmically spaced frequency bands
   static const auto logBins = logspace(1, SAMPLES/2, MATRIX_WIDTH + 1);
@@ -171,8 +180,8 @@ unsigned displayWaveSpectrum(double *magnitudes) {
     int peakY = MATRIX_HEIGHT - peakHeights[band];
     int peakIndex = xyToIndex(flippedBand, upper);
     int minIndex  = xyToIndex(flippedBand, (MATRIX_HEIGHT >> 1) - height);
-    leds[peakIndex] = CRGB::Magenta;
-    leds[minIndex] = CRGB::Magenta;
+    leds[peakIndex] = peakColor;
+    leds[minIndex] = peakColor;
   }
 
   // Serial.println("\n");
