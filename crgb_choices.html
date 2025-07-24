@@ -1,0 +1,54 @@
+<style>
+  .button-columns {
+    display: flex;
+    gap: 20px;
+    flex-wrap: wrap;
+    padding-left: 40px;
+  }
+
+  .color-group {
+    display: flex;
+    flex-direction: column;
+  }
+
+
+  .color-button {
+    width: 140px;
+    height: 30px;
+    font-size: 12px;
+    border: 2px light black;
+    color: black;
+    cursor: pointer;
+    font-weight: bold;
+  }
+</style>
+
+<div id="buttonContainer" style="background-color: #373433" class="button-columns"></div>
+
+<script>
+  
+  const colors = {Black:"#000000",Maroon:"#800000",DarkRed:"#8B0000",Red:"#FF0000",FireBrick:"#B22222",Brown:"#A52A2A",DimGray:"#696969",DimGrey:"#696969",IndianRed:"#CD5C5C",Gray:"#808080",Grey:"#808080",RosyBrown:"#BC8F8F",LightCoral:"#F08080",DarkGrey:"#A9A9A9",DarkGray:"#A9A9A9",Silver:"#C0C0C0",LightGrey:"#D3D3D3",Gainsboro:"#DCDCDC",WhiteSmoke:"#F5F5F5",Snow:"#FFFAFA",White:"#FFFFFF",MistyRose:"#FFE4E1",Salmon:"#FA8072",Tomato:"#FF6347",Plaid:"#CC5533",DarkSalmon:"#E9967A",Coral:"#FF7F50",OrangeRed:"#FF4500",LightSalmon:"#FFA07A",Sienna:"#A0522D",Seashell:"#FFF5EE",SaddleBrown:"#8B4513",Chocolate:"#D2691E",SandyBrown:"#F4A460",PeachPuff:"#FFDAB9",Peru:"#CD853F",Linen:"#FAF0E6",FairyLightNCC:"#FF9D2A",Bisque:"#FFE4C4",DarkOrange:"#FF8C00",BurlyWood:"#DEB887",AntiqueWhite:"#FAEBD7",Tan:"#D2B48C",NavajoWhite:"#FFDEAD",BlanchedAlmond:"#FFEBCD",PapayaWhip:"#FFEFD5",Moccasin:"#FFE4B5",Orange:"#FFA500",Wheat:"#F5DEB3",OldLace:"#FDF5E6",FloralWhite:"#FFFAF0",DarkGoldenrod:"#B8860B",Goldenrod:"#DAA520",Cornsilk:"#FFF8DC",Gold:"#FFD700",FairyLight:"#FFE42D",LemonChiffon:"#FFFACD",Khaki:"#F0E68C",PaleGoldenrod:"#EEE8AA",DarkKhaki:"#BDB76B",Olive:"#808000",Yellow:"#FFFF00",Beige:"#F5F5DC",LightGoldenrodYellow:"#FAFAD2",LightYellow:"#FFFFE0",Ivory:"#FFFFF0",OliveDrab:"#6B8E23",YellowGreen:"#9ACD32",DarkOliveGreen:"#556B2F",GreenYellow:"#ADFF2F",Chartreuse:"#7FFF00",LawnGreen:"#7CFC00",DarkGreen:"#006400",Green:"#008000",ForestGreen:"#228B22",LimeGreen:"#32CD32",Lime:"#00FF00",DarkSeaGreen:"#8FBC8F",LightGreen:"#90EE90",PaleGreen:"#98FB98",Honeydew:"#F0FFF0",SeaGreen:"#2E8B57",MediumSeaGreen:"#3CB371",SpringGreen:"#00FF7F",MintCream:"#F5FFFA",MediumSpringGreen:"#00FA9A",MediumAquamarine:"#66CDAA",Aquamarine:"#7FFFD4",Turquoise:"#40E0D0",LightSeaGreen:"#20B2AA",MediumTurquoise:"#48D1CC",DarkSlateGray:"#2F4F4F",DarkSlateGrey:"#2F4F4F",Teal:"#008080",DarkCyan:"#008B8B",Cyan:"#00FFFF",Aqua:"#00FFFF",PaleTurquoise:"#AFEEEE",LightCyan:"#E0FFFF",Azure:"#F0FFFF",DarkTurquoise:"#00CED1",CadetBlue:"#5F9EA0",PowderBlue:"#B0E0E6",LightBlue:"#ADD8E6",DeepSkyBlue:"#00BFFF",SkyBlue:"#87CEEB",LightSkyBlue:"#87CEFA",SteelBlue:"#4682B4",AliceBlue:"#F0F8FF",DodgerBlue:"#1E90FF",SlateGray:"#708090",SlateGrey:"#708090",LightSlateGrey:"#778899",LightSlateGray:"#778899",LightSteelBlue:"#B0C4DE",CornflowerBlue:"#6495ED",RoyalBlue:"#4169E1",Navy:"#000080",DarkBlue:"#00008B",MediumBlue:"#0000CD",Blue:"#0000FF",MidnightBlue:"#191970",Lavender:"#E6E6FA",GhostWhite:"#F8F8FF",SlateBlue:"#6A5ACD",DarkSlateBlue:"#483D8B",MediumSlateBlue:"#7B68EE",MediumPurple:"#9370DB",Amethyst:"#9966CC",BlueViolet:"#8A2BE2",Indigo:"#4B0082",DarkOrchid:"#9932CC",DarkViolet:"#9400D3",MediumOrchid:"#BA55D3",Purple:"#800080",DarkMagenta:"#8B008B",Fuchsia:"#FF00FF",Magenta:"#FF00FF",Violet:"#EE82EE",Plum:"#DDA0DD",Thistle:"#D8BFD8",Orchid:"#DA70D6",MediumVioletRed:"#C71585",DeepPink:"#FF1493",HotPink:"#FF69B4",LavenderBlush:"#FFF0F5",PaleVioletRed:"#DB7093",Crimson:"#DC143C",Pink:"#FFC0CB",LightPink:"#FFB6C1"};
+
+
+  function copyColor(color) {
+    navigator.clipboard.writeText(color).then(() => {
+     	alert(`Copied ${color}`);
+    });
+  }
+
+  const container = document.getElementById('buttonContainer');
+
+  Object.keys(colors).forEach(key => {
+    const groupDiv = document.createElement('div');
+    groupDiv.className = 'color-group';
+
+    const btn = document.createElement('button');
+    btn.className = 'color-button';
+    btn.style.backgroundColor = colors[key];
+    btn.textContent = key;
+    btn.onclick = () => copyColor('CRGB::' + key);
+    groupDiv.appendChild(btn);
+
+    container.appendChild(groupDiv);
+  });
+</script>
