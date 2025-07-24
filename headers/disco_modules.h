@@ -61,7 +61,7 @@ const std::array<uint16_t, MATRIX_WIDTH + 1> logspace(double start, double stop,
   return bins;
 }
 
-bool frameInterval(uint8_t BRIGHTNESS) {
+bool frameInterval(uint8_t &BRIGHTNESS) {
 	
 	static uint8_t debounce = 0;
 
