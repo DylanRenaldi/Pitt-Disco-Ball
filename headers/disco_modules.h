@@ -27,6 +27,16 @@ void setupI2S() {
   i2s_zero_dma_buffer(I2S_NUM_0);
 }
 
+// Converts 2D matrix coordinates to 1D LED index for 4-tile layout
+uint16_t xyToIndex(uint8_t x, uint8_t y){
+	uint16_t m = 256*(x < 16);
+	
+	if(y&1)
+		return (271 + 16*y - x%16)^m;
+	
+	return (256 + 16*y + x%16)^m;
+}
+
 void gradient(CRGB *out, CRGB begin, CRGB end){
 
   float dr = float(end.r - begin.r)/(MATRIX_HEIGHT - 1),
@@ -51,7 +61,7 @@ const std::array<uint16_t, MATRIX_WIDTH + 1> logspace(double start, double stop,
   return bins;
 }
 
-bool frameInterval() {
+bool frameInterval(uint8_t BRIGHTNESS) {
 	
 	static uint8_t debounce = 0;
 
@@ -79,4 +89,27 @@ bool frameInterval() {
 	lastFrame = millis();
 	
 	return false;
+}
+
+void I2S_FFT_data(ArduinoFFT<double> FFT, double *vReal, double *vImag) {
+	int32_t samples[SAMPLES];
+    size_t bytes_read = 0;
+    // unsigned startMicros = micros(); // Track latency
+
+    i2s_read(I2S_NUM_0, (void*)samples, SAMPLES * sizeof(int32_t), &bytes_read, portMAX_DELAY);
+    int samples_read = bytes_read / sizeof(int32_t);
+
+    // Convert raw I2S samples to normalized floats
+    for (int i = 0; i < samples_read; i++) {
+      // peak amplitude
+      vReal[i] = samples[i] / double((1 << 31) - 1);
+      vImag[i] = 0; // set to 0 to avoid erroneous errors and overflow
+    }
+
+	// assuming FFT object: FFT = ArduinoFFT<double>(vReal, vImag, SAMPLES, SAMPLING_FREQ);
+
+    // Apply windowing and perform FFT
+    FFT.windowing(FFTWindow::Hamming, FFTDirection::Forward);
+    FFT.compute(FFTDirection::Forward);
+    FFT.complexToMagnitude();
 }
