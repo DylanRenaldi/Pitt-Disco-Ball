@@ -13,19 +13,21 @@
 #define MATRIX_HEIGHT     16      // Height of LED panel
 #define NUM_LEDS          (MATRIX_WIDTH * MATRIX_HEIGHT)  // Total number of LEDs
 #define DATA_PIN          5       // Pin connected to the LED strip
+#define SAMPLES           512     // Quantity of Samples
+#define SAMPLING_FREQ     48000   // Sampling Frequency (center frequency is SAMPLING_FREQ / 2)
+#define BLUETOOTH_LED     27
+#define I2S_WS                25      // Word Select (LRCLK)
+#define I2S_SD                32      // Serial Data input
+#define I2S_SCK               33      // Bit Clock (BCLK)
+#define INCREASE_BRIGHTNESS   17
+#define DECREASE_BRIGHTNESS   16
+#define BLUETOOTH_LED         27
+
 
 // =============================================================================
 // Global Variables
 // =============================================================================
 
-const uint8_t 
-  INCREASE_BRIGHTNESS   =27,      // increase brightness button -> GPIO27
-  DECREASE_BRIGHTNESS   =14,      // decrease brightness button -> GPIO14
-  I2S_WS                =25,      // Word Select (LRCLK)
-  I2S_SD                =33,      // Serial Data input
-  I2S_SCK               =26,      // Bit Clock (BCLK)
-  SAMPLES               =512,     // Quantity of Samples
-  SAMPLING_FREQ         =48000;   // Sampling Frequency (center frequency is SAMPLING_FREQ / 2)
 uint8_t BRIGHTNESS        =5;     // Initial Brightness
 
 XYMap xymap(MATRIX_WIDTH, MATRIX_HEIGHT);     // XYMap object
@@ -33,7 +35,7 @@ CRGB leds[NUM_LEDS],                          // LED matrix buffer
      colors[MATRIX_HEIGHT];                   // CRGB color gradient array
 ArduinoFFT<double> FFT;                       // FFT object
 double vReal[SAMPLES];                        // Real part of FFT input
-double vImag[SAMPLES]{};                      // Imaginary part of FFT input
+double vImag[SAMPLES];                      // Imaginary part of FFT input
 int xyIndexTable[MATRIX_HEIGHT][MATRIX_WIDTH];
 
 
@@ -45,7 +47,7 @@ double smoothedBands[MATRIX_WIDTH] = {0};   // Smoothed FFT magnitudes for each 
 double noiseFloor[MATRIX_WIDTH] = {0.05};   // Dynamic noise floor per band
 int peakHeights[MATRIX_WIDTH] = {0};        // Keeps track of peak levels per band
 unsigned long lastPeakUpdate[MATRIX_WIDTH] = {0};
-const int peakHoldTime = 50;     // Hold time for peaks in milliseconds
+const int peakHoldTime = 150;     // Hold time for peaks in milliseconds
 const int peakFallSpeed = 1;      // How fast the peak indicator drops
 
 // Beat detection variables
@@ -72,6 +74,34 @@ std::vector<int> logspace(double start, double stop, int numbins) {
 std::vector<int> logBins = logspace(2, 500, MATRIX_WIDTH+1);
 
 // =============================================================================
+// Initialize and Configure I2S audio input
+// =============================================================================
+void setupI2S() {
+  i2s_config_t i2s_config = {
+    .mode = i2s_mode_t(I2S_MODE_MASTER | I2S_MODE_RX),
+    .sample_rate = SAMPLING_FREQ,
+    .bits_per_sample = I2S_BITS_PER_SAMPLE_32BIT,
+    .channel_format = I2S_CHANNEL_FMT_ONLY_LEFT,
+    .communication_format = i2s_comm_format_t(I2S_COMM_FORMAT_I2S),
+    .intr_alloc_flags = ESP_INTR_FLAG_LEVEL1,
+    .dma_buf_count = 4,
+    .dma_buf_len = 256,
+    .use_apll = false
+  };
+
+  i2s_pin_config_t pin_config = {
+    .bck_io_num = I2S_SCK,
+    .ws_io_num = I2S_WS,
+    .data_out_num = I2S_PIN_NO_CHANGE,
+    .data_in_num = I2S_SD
+  };
+
+  i2s_driver_install(I2S_NUM_0, &i2s_config, 0, NULL);
+  i2s_set_pin(I2S_NUM_0, &pin_config);
+  i2s_zero_dma_buffer(I2S_NUM_0);
+}
+
+// =============================================================================
 // Initialize system
 // =============================================================================
 void setup() {
@@ -86,8 +116,8 @@ void setup() {
   FastLED.clear();
   FastLED.show();
 
-  pinMode(INCREASE_BRIGHTNESS, INPUT_PULLUP);
-  pinMode(DECREASE_BRIGHTNESS, INPUT_PULLUP);
+  pinMode(INCREASE_BRIGHTNESS, INPUT_PULLDOWN);
+  pinMode(DECREASE_BRIGHTNESS, INPUT_PULLDOWN);
 
   
 }
@@ -108,10 +138,10 @@ void loop() {
 
   if(!debounce) {
     uint8_t b = BRIGHTNESS;
-    if(!digitalRead(INCREASE_BRIGHTNESS) && BRIGHTNESS < 100)    // GPIO27
+    if(digitalRead(INCREASE_BRIGHTNESS) && BRIGHTNESS < 100)    // GPIO27
       FastLED.setBrightness(++BRIGHTNESS);
 
-    else if (!digitalRead(DECREASE_BRIGHTNESS) && BRIGHTNESS)    // GPIO14
+    else if (digitalRead(DECREASE_BRIGHTNESS) && BRIGHTNESS)    // GPIO14
       FastLED.setBrightness(--BRIGHTNESS);
 
     if(b != BRIGHTNESS){
@@ -120,8 +150,13 @@ void loop() {
     }
   }
 
-  static unsigned long lastFrame = 0;
-  if (millis() - lastFrame < dynamicFrameInterval) return;
+  static unsigned lastFrame = 0, diff;
+  const int frameInterval = 25;           // Target ~40 FPS
+
+  diff = millis() - lastFrame;            // save diff because it may change in midst of below comparison and cause an erroneous error
+
+  if (diff < frameInterval) return;
+  debounce -= (debounce >= diff ? diff : debounce);     // only change debounce after frameInterval (otherwise, debounce will be compoundingly reduced at the clock rate)
   lastFrame = millis();
 
   // ---------------------------------------
@@ -383,33 +418,7 @@ void loop() {
   FastLED.show();
 }
 
-// =============================================================================
-// Initialize and Configure I2S audio input
-// =============================================================================
-void setupI2S() {
-  i2s_config_t i2s_config = {
-    .mode = i2s_mode_t(I2S_MODE_MASTER | I2S_MODE_RX),
-    .sample_rate = SAMPLING_FREQ,
-    .bits_per_sample = I2S_BITS_PER_SAMPLE_32BIT,
-    .channel_format = I2S_CHANNEL_FMT_ONLY_LEFT,
-    .communication_format = i2s_comm_format_t(I2S_COMM_FORMAT_I2S),
-    .intr_alloc_flags = ESP_INTR_FLAG_LEVEL1,
-    .dma_buf_count = 4,
-    .dma_buf_len = 256,
-    .use_apll = false
-  };
 
-  i2s_pin_config_t pin_config = {
-    .bck_io_num = I2S_SCK,
-    .ws_io_num = I2S_WS,
-    .data_out_num = I2S_PIN_NO_CHANGE,
-    .data_in_num = I2S_SD
-  };
-
-  i2s_driver_install(I2S_NUM_0, &i2s_config, 0, NULL);
-  i2s_set_pin(I2S_NUM_0, &pin_config);
-  i2s_zero_dma_buffer(I2S_NUM_0);
-}
 
 // =============================================================================
 // Visualize audio frequency bands as vertical bars with peak indicators
@@ -421,7 +430,7 @@ void displayReactiveBands(double *magnitudes) {
   }
 
   unsigned long now = millis();
-  for (int band = 0; band <32; band++) {
+  for (int band = 0; band <MATRIX_WIDTH; band++) {
     int startBin = logBins[band];
     int endBin = logBins[band + 1];
     int binCount = endBin - startBin;
