@@ -71,7 +71,7 @@ std::vector<int> logspace(double start, double stop, int numbins) {
     return bins;
 }
 
-std::vector<int> logBins = logspace(2, 500, MATRIX_WIDTH+1);
+std::vector<int> logBins = logspace(2, SAMPLES/2, MATRIX_WIDTH+1);
 
 // =============================================================================
 // Initialize and Configure I2S audio input
@@ -118,11 +118,9 @@ void setup() {
 
   pinMode(INCREASE_BRIGHTNESS, INPUT_PULLDOWN);
   pinMode(DECREASE_BRIGHTNESS, INPUT_PULLDOWN);
-
-  
+  pinMode(BLUETOOTH_LED, OUTPUT);
 }
 
-int incoming = 255255255255255255150; // Default mode and color input value
 String incomingData = "";
 int r1 = 255;
 int g1 = 0;
@@ -159,6 +157,43 @@ void loop() {
     }
   }
 
+  // ---------------------------------------
+  // Check if Bluetooth is connected to display the Bluetooth LED
+  // ---------------------------------------
+  static int8_t connected = false;
+  static uint16_t BLUETOOTH_BUFFER = 0;
+  static int lastTime = millis(), difference;
+
+  difference = millis() - lastTime;
+  lastTime = millis();
+
+  if(BLUETOOTH_BUFFER) {
+    if(!digitalRead(BLUETOOTH_LED))
+      digitalWrite(BLUETOOTH_LED, HIGH);
+
+    if(BLUETOOTH_BUFFER > difference)
+      BLUETOOTH_BUFFER -= difference;
+    else {
+      BLUETOOTH_BUFFER = 0;
+      digitalWrite(BLUETOOTH_LED, LOW);
+    }
+  } 
+
+  if (ESP_BT.hasClient()) {
+    if (!connected) {
+      connected = true;
+      BLUETOOTH_BUFFER = 3000;      // 1000ms
+    } else if (ESP_BT.available()) {
+      BLUETOOTH_BUFFER = 3000;
+    }
+  }else if (connected) {
+    connected = false;
+    BLUETOOTH_BUFFER = 3000;        // 1000ms
+  }
+
+  // ---------------------------------------
+  // Framerate and timing variables
+  // ---------------------------------------
   static unsigned lastFrame = 0, diff;
   const int frameInterval = 25;           // Target ~40 FPS
 
@@ -337,30 +372,39 @@ void loop() {
         smoothedBands[band] = 0.7 * smoothedBands[band] + 0.3 * adjusted;
 
         double scaled = log10(smoothedBands[band] + 1) * 10;
-        int height = map((int)scaled, 0, 20, 0, MATRIX_HEIGHT);
-        height = constrain(height, 0, MATRIX_HEIGHT);
-
-        // Update peak
-        if (height >= peakHeights[band]) {
-          peakHeights[band] = height;
-          lastPeakUpdate[band] = now;
+        int height = map((int)scaled, 0, 20, 1, MATRIX_HEIGHT);  
+        height = constrain(height, 1, MATRIX_HEIGHT);
+        if(height==1 && !peakHeights[band]) continue;
+      
+      
+      // Peak hold logic
+        if (height > 1 && height >= peakHeights[band]) {
+            peakHeights[band] = height;
+            lastPeakUpdate[band] = now;
         } else if (now - lastPeakUpdate[band] > peakHoldTime) {
-          peakHeights[band] = max(0, peakHeights[band] - peakFallSpeed);
+            if(peakHeights[band] <= peakFallSpeed) {
+                peakHeights[band] = 0;
+                continue;
+            }
+      
+            peakHeights[band] -= peakFallSpeed;
+        } // else continue;
+      
+        // Color mapping based on height
+        //uint8_t hue = map(height, 0, MATRIX_HEIGHT, 160, 0);
+        //CRGB barColor = CHSV(hue, 255, 255);
+        int flippedBand = MATRIX_WIDTH - 1 - band;  // Flip horizontally for visual symmetry
+      
+        // Draw vertical bar (starting 1 because height map is 1-offset)
+        for (int y = 1, index; y < height; y++) {
+            index = xyToIndex(flippedBand, MATRIX_HEIGHT - y);
+            leds[index] = useGradient ? gradientColors[y-1] : CRGB(r1, g1, b1);
         }
-
-        // Draw vertical bar
-        int flippedBand = MATRIX_WIDTH - 1 - band;
-        for (int y = 0; y < height; y++) {
-          int index = xyToIndex(flippedBand, MATRIX_HEIGHT - 1 - y);
-          leds[index] = useGradient ? gradientColors[y] : CRGB(r1, g1, b1);
-        }
-
-        // Peak indicator
-        if (peakHeights[band] > 0) {
-          int peakY = MATRIX_HEIGHT - 1 - peakHeights[band];
-          int peakIndex = xyToIndex(flippedBand, peakY);
-          leds[peakIndex] = CRGB::White;
-        }
+      
+        // Draw peak marker
+        int peakY = MATRIX_HEIGHT - peakHeights[band];
+        int peakIndex = xyToIndex(flippedBand, peakY);
+        leds[peakIndex] = CRGB::White;
       }
       break;
     }
@@ -535,4 +579,3 @@ void gradient(CRGB *out, CRGB begin, CRGB end){
   for(uint8_t i = 0; i < MATRIX_HEIGHT; ++i, begin.r += dr, begin.g += dg, begin.b += db)
     out[i] = begin;
 }
-
