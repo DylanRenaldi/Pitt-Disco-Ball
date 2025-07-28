@@ -7,7 +7,7 @@ void displayWaveform(double *values) {
     int endBin = logBins[band + 1];
     int binCount = endBin - startBin;
 
-    // Average the magnitudes in the band
+    // Average the magnitudes in the band                           
     double sum = 0;
     for (int i = startBin; i < endBin && i < SAMPLES; i++) {
       sum += values[i];
