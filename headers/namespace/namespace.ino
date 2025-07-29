@@ -1,13 +1,8 @@
 
 #include "disco.hpp"
 
-CRGB leds[NUM_LEDS];
-CRGB colors[MATRIX_HEIGHT];
-
 void setup() {
   disco::init();
-
-  // disco::gradient(colors, CRGB::Aqua, CRGB::Fuchsia);
 }
 
 void loop() {
@@ -26,4 +21,10 @@ void loop() {
 
   // modes
   // etc.  
+}
+
+// Convert (x, y) coordinate to 1D LED index based on matrix layout
+void setxyLEDColor(int x, int y, CRGB color) {
+	uint16_t index = disco::xyIndexTable[x][y];
+	disco::leds[index] = color;
 }
