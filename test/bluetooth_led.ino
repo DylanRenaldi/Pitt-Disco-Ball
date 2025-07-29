@@ -8,13 +8,13 @@
 BluetoothSerial ESP_BT;
 
 void setup() {
-  Serial.begin(115200);
-  ESP_BT.begin("ESP-Controller");
-  
-  pinMode(INCREASE_BRIGHTNESS, INPUT_PULLUP);
-  pinMode(DECREASE_BRIGHTNESS, INPUT_PULLUP);
-
-  pinMode(BLUETOOTH_LED, OUTPUT);
+	Serial.begin(115200);
+	ESP_BT.begin("ESP-Controller");
+	
+	pinMode(INCREASE_BRIGHTNESS, INPUT_PULLUP);
+	pinMode(DECREASE_BRIGHTNESS, INPUT_PULLUP);
+	
+	pinMode(BLUETOOTH_LED, OUTPUT);
 }
 
 uint8_t BRIGHTNESS = 5;
@@ -22,12 +22,12 @@ uint8_t BRIGHTNESS = 5;
 
 void loop() {
   
-  static uint8_t diff = 0;
+	static uint8_t diff = 0;
 	static uint8_t mode = 7;
 	static unsigned long lastf = millis();
 
 
-  if (frameInterval(diff)) return;
+	if (frameInterval(diff)) return;
 	checkBluetooth(ESP_BT, diff, mode);
 
 	if (millis() - lastf > 5000) {		// every 5 seconds, synchronously
@@ -56,7 +56,7 @@ void checkBluetooth(BluetoothSerial &ESP_BT, const uint8_t &diff, const uint8_t 
 	static bool connected = false;
 	static uint8_t iteration = 0,update = mode;                              // set to 0 and mode, respectively so nothing occurs first iteration
 	static uint16_t ON_BUFFER  = 0,
-									OFF_BUFFER = 0;
+			OFF_BUFFER = 0;
 
 	if (update != mode) {
 		OFF_BUFFER = 100 * (iteration > 0 || ON_BUFFER > 0);				// 100 ms if BLUETOOTH_LED is logically on in any facet
