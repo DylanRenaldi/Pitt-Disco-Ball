@@ -38,69 +38,68 @@ void disco::init() {
 	disco::ESP_BT.begin("Pitt-DiscoLamp");
 	setupI2S();
 
-	FastLED.addLeds<WS2812B, MATRIX_DATA_PIN, GRB>(disco::leds, NUM_LEDS);
+	FastLED.addLeds<WS2812B, MATRIX_DATA_PIN, GRB>(disco::leds, NUM_LEDS).setCorrection(TypicalLEDStrip);
 	FastLED.setBrightness(10);
-	FastLED.clear();
 
 	pinMode(INCREASE_BRIGHTNESS, INPUT_PULLDOWN);
 	pinMode(DECREASE_BRIGHTNESS, INPUT_PULLDOWN);
 	pinMode(BLUETOOTH_LED, OUTPUT);
 
-	disco::setGradient(CRGB::Aqua, CRGB::Fuchsia);			// -> disco:gradient <- colors
+	disco::setColorProfile(CRGB::Aqua, CRGB::Fuchsia);			// -> disco:gradient <- colors
 }
 
-void disco::setGradient(CRGB begin, CRGB end){
+void disco::setColorProfile(struct CRGB begin, const struct CRGB& end){
 
-	float 	dr = float(end.r - begin.r)/(MATRIX_HEIGHT - 1),
-		dg = float(end.g - begin.g)/(MATRIX_HEIGHT - 1),
-          	db = float(end.b - begin.b)/(MATRIX_HEIGHT - 1);  
+	float dr = float(end.r - begin.r)/(MATRIX_HEIGHT - 1),
+		  dg = float(end.g - begin.g)/(MATRIX_HEIGHT - 1),
+          db = float(end.b - begin.b)/(MATRIX_HEIGHT - 1);  
 
 	for(uint8_t i = 0; i < MATRIX_HEIGHT; ++i, begin.r += dr, begin.g += dg, begin.b += db)
-		disco::gradient[i] = begin;
+		disco::colorProfile[i] = begin;
 	
-	disco::gradient[MATRIX_HEIGHT - 1] = end;	// manually set end CRGB value because of float->int round-off error
+	disco::colorProfile[MATRIX_HEIGHT - 1] = end;	// manually set end CRGB value because of float->int round-off error
 }
 
-void disco::readBluetooth(uint8_t &mode, const bool debug = false) {
+void disco::readBluetooth(uint8_t &mode, bool debug) {
 
-	static String incomingData = "";
-  	static CRGB RGB1,RGB2;
+  static String incomingData = "";
+  static CRGB RGB1,RGB2;
 
-  	for (char c, ix{},temp; disco::ESP_BT.available() && c != '\n';) {
-    		c = disco::ESP_BT.read();
+  for (char c, ix{},temp; disco::ESP_BT.available() && c != '\n';) {
+    c = disco::ESP_BT.read();
 
-    		if (c != ',') {
-      			incomingData += c;
-    		} else {
-			temp = incomingData.toInt();
+    if (c != ',') {
+      incomingData += c;
+    } else {
+		temp = incomingData.toInt();
 
-			if (ix < 6) {
-				(ix < 3 ? RGB1 : RGB2)[ix%3] = temp;
-			} else if (ix == 6) {
-				 mode = temp;
-			} else {
-				temp = constrain(temp, 0, 100);					// assert brightnes 0 < brightness < 100
-			        FastLED.setBrightness(temp);					// brightness updated here, can be read via FastLED.getBrightness()
-			}	  
-			      
-			++ix;
-			incomingData = "";
-		}
-	}
+      if (ix < 6) {
+        (ix < 3 ? RGB1 : RGB2)[ix%3] = temp;
+      } else if (ix == 6) {
+        mode = temp;
+      } else {
+		temp = constrain(temp, 0, 100);					// assert brightnes 0 < brightness < 100
+        FastLED.setBrightness(temp);					// brightness updated here, can be read via FastLED.getBrightness()
+      }	  
+      
+      ++ix;
+      incomingData = "";
+    }
+  }
   
 
-	if (debug) {
-		Serial.printf("\nRGB1(%i,%i,%i), RGB2(%i,%i,%i), mode = %i, brightness = %i\n", RGB1[0],RGB1[1],RGB1[2], RGB2[0],RGB2[1],RGB2[2], mode, FastLED.getBrightness()); 
-  	}
+  if (debug) {
+	Serial.printf("\nRGB1(%i,%i,%i), RGB2(%i,%i,%i), mode = %i, brightness = %i\n", RGB1[0],RGB1[1],RGB1[2], RGB2[0],RGB2[1],RGB2[2], mode, FastLED.getBrightness()); 
+  }
 
-	// set gradient if gradient bounds are different
-  	if(RGB1 != disco::gradient[0] || RGB2 != disco::gradient[MATRIX_HEIGHT - 1]) {
-		if (debug) Serial.println("gradient updated");
-    		disco::setGradient(RGB1, RGB2);
-  	}
+  // set gradient if gradient bounds are different
+  if(RGB1 != disco::colorProfile[0] || RGB2 != disco::colorProfile[MATRIX_HEIGHT - 1]) {
+	if (debug) Serial.println("gradient updated");
+    disco::setColorProfile(RGB1, RGB2);
+  }
   
-  	incomingData = "";
-  	while (disco::ESP_BT.available()) disco::ESP_BT.read();       // ignore extra data if an update was sent too quickly
+  incomingData = "";
+  while (disco::ESP_BT.available()) disco::ESP_BT.read();       // ignore extra data if an update was sent too quickly
 }
 
 void disco::debounceButtons(const uint8_t &diff) {
