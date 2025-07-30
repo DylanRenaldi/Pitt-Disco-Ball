@@ -51,19 +51,62 @@ void disco::init() {
 
 void disco::setGradient(CRGB begin, CRGB end){
 
-	float dr = float(end.r - begin.r)/(MATRIX_HEIGHT - 1),
-		  dg = float(end.g - begin.g)/(MATRIX_HEIGHT - 1),
-          db = float(end.b - begin.b)/(MATRIX_HEIGHT - 1);  
+	float 	dr = float(end.r - begin.r)/(MATRIX_HEIGHT - 1),
+		dg = float(end.g - begin.g)/(MATRIX_HEIGHT - 1),
+          	db = float(end.b - begin.b)/(MATRIX_HEIGHT - 1);  
 
-	// last color doesn't matter (if unsigned overflow) because of peak marker
 	for(uint8_t i = 0; i < MATRIX_HEIGHT; ++i, begin.r += dr, begin.g += dg, begin.b += db)
 		disco::gradient[i] = begin;
+	
+	disco::gradient[MATRIX_HEIGHT - 1] = end;	// manually set end CRGB value because of float->int round-off error
 }
 
+void disco::readBluetooth(uint8_t &mode, const bool debug = false) {
+
+	static String incomingData = "";
+  	static CRGB RGB1,RGB2;
+
+  	for (char c, ix{},temp; disco::ESP_BT.available() && c != '\n';) {
+    		c = disco::ESP_BT.read();
+
+    		if (c != ',') {
+      			incomingData += c;
+    		} else {
+			temp = incomingData.toInt();
+
+			if (ix < 6) {
+				(ix < 3 ? RGB1 : RGB2)[ix%3] = temp;
+			} else if (ix == 6) {
+				 mode = temp;
+			} else {
+				temp = constrain(temp, 0, 100);					// assert brightnes 0 < brightness < 100
+			        FastLED.setBrightness(temp);					// brightness updated here, can be read via FastLED.getBrightness()
+			}	  
+			      
+			++ix;
+			incomingData = "";
+		}
+	}
+  
+
+	if (debug) {
+		Serial.printf("\nRGB1(%i,%i,%i), RGB2(%i,%i,%i), mode = %i, brightness = %i\n", RGB1[0],RGB1[1],RGB1[2], RGB2[0],RGB2[1],RGB2[2], mode, FastLED.getBrightness()); 
+  	}
+
+	// set gradient if gradient bounds are different
+  	if(RGB1 != disco::gradient[0] || RGB2 != disco::gradient[MATRIX_HEIGHT - 1]) {
+		if (debug) Serial.println("gradient updated");
+    		disco::setGradient(RGB1, RGB2);
+  	}
+  
+  	incomingData = "";
+  	while (disco::ESP_BT.available()) disco::ESP_BT.read();       // ignore extra data if an update was sent too quickly
+}
 
 void disco::debounceButtons(const uint8_t &diff) {
 
-	static uint8_t debounce = 0, brightness = 10;
+	static uint8_t debounce = 0, brightness;
+	brightness = FastLED.getBrightness();							// update brightness (that may have been changed via bluetooth update)
 
 	if(!debounce) {
 		uint8_t b = brightness;
@@ -74,7 +117,7 @@ void disco::debounceButtons(const uint8_t &diff) {
 			FastLED.setBrightness(--brightness);
 
 		if(b != brightness){
-			//Serial.println(brightness);
+			Serial.println(brightness);
 			debounce = 100;
 		}
 	} else {
@@ -88,16 +131,16 @@ void disco::checkBluetooth(const uint8_t &diff, const uint8_t &mode) {
 	static bool connected = false;
 	static uint8_t iterations = 0,update = mode;							// initialize to avoid blinking on first iteration
 	static uint16_t ON_BUFFER  = 0,
-									OFF_BUFFER = 0;
+					OFF_BUFFER = 0;
 
 	if (update != mode) {
-		OFF_BUFFER = 100 * bool(iterations | ON_BUFFER);				// 100 ms if BLUETOOTH_LED is logically on in any facet
+		OFF_BUFFER = BLINK_INTERVAL * bool(iterations | ON_BUFFER);			// 100 ms if BLUETOOTH_LED is logically on in any facet
 		iterations = update = mode;
 	}
 	
 	if (disco::ESP_BT.hasClient() != connected) {
 		connected = !connected;
-		ON_BUFFER = 1000;																			// 1000 ms
+		ON_BUFFER = BT_CONNECTION;
 	}
 
 	if (ON_BUFFER) {	// ON_BUFFER takes priority
@@ -108,7 +151,7 @@ void disco::checkBluetooth(const uint8_t &diff, const uint8_t &mode) {
 		OFF_BUFFER = (OFF_BUFFER > diff ? OFF_BUFFER - diff : 0);
 
 	} else if (iterations) {
-		ON_BUFFER = OFF_BUFFER = 100;
+		ON_BUFFER = OFF_BUFFER = BLINK_INTERVAL;
 		--iterations;
 	}
 }
@@ -124,6 +167,10 @@ bool disco::frameInterval(uint8_t &diff) {
 	lastFrame = millis();
 	
 	return false;
+}
+
+void disco::show() {
+	FastLED.show();
 }
 
 
@@ -147,5 +194,3 @@ void disco::I2S_FFT_data() {
 	disco::FFT.compute(FFTDirection::Forward);
 	disco::FFT.complexToMagnitude();
 }
-
-
