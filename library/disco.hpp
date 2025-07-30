@@ -1,7 +1,8 @@
 
 #pragma once
 
-#include "disco_peripherals.h"
+#include "discoPeripherals.h"
+#include "discoModes.hpp"
 
 #include <BluetoothSerial.h>
 #include <arduinoFFT.h>
@@ -14,9 +15,9 @@ namespace disco {
 	void show();
 
 	void checkBluetooth(const uint8_t&, const uint8_t&);
-	void readBluetooth(uint8_t&, const bool);
 	void debounceButtons(const uint8_t&);
-	void setGradient(CRGB, CRGB);
+	void readBluetooth(uint8_t&, bool);
+	void setColorProfile(CRGB, CRGB);
 	void I2S_FFT_data();
 	
 	bool frameInterval(uint8_t&);
@@ -30,7 +31,7 @@ namespace disco {
 
 	inline BluetoothSerial ESP_BT;
 
-	inline CRGB gradient[MATRIX_HEIGHT];
+	inline CRGB colorProfile[MATRIX_HEIGHT];
 	inline CRGB leds[NUM_LEDS];
 	
 	inline ArduinoFFT<double> FFT;
