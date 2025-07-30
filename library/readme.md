@@ -1,6 +1,12 @@
-(will need to add comments and parameter stuff to each module definition and implementation)
+# To use headers:
+(1) Create a folder `Pitt-DiscoLamp` in the `Documents/Arduino/libraries` folder
+(2) push the `library.properties` files in this repo directory to the `Pitt-DiscoLamp` folder
+(3) create `src` folder in the `Pitt-DiscoLamp` folder
+(4) push `disco.cpp`, `disco.hpp`, and `disco.h` to the `src` folder
 
-*only need to include the `<disco.hpp>` file*
+include `#include <disco.hpp>` at the top of the arduino .ino file
+
+(will need to add comments and parameter stuff to each module definition and implementation)
 
 
 # NOTE:
