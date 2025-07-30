@@ -17,7 +17,7 @@ namespace disco {
 	void checkBluetooth(const uint8_t&, const uint8_t&);
 	void debounceButtons(const uint8_t&);
 	void readBluetooth(uint8_t&, bool);
-	void setColorProfile(CRGB, CRGB);
+	void setColorProfile(struct CRGB, const struct CRGB&);
 	void I2S_FFT_data();
 	
 	bool frameInterval(uint8_t&);
