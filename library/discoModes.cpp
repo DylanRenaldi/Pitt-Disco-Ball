@@ -173,7 +173,7 @@ void discoModes::rippleBeat() {
 	static int rippleRadius = -1;
 	static unsigned long rippleTime = 0;
 
-	if (millis() - rippleTime > 300 && prevLowEnergy * 1.5 < disco::vReal[2]) {
+	if (millis() - rippleTime > 300) {
 		rippleRadius = 0;
 		rippleTime = millis();
 	}
@@ -198,6 +198,7 @@ void discoModes::rippleBeat() {
 
 // mode 6 <- Fire Glow (bass-driven flicker)
 void discoModes::fireGlow() {
+	disco::I2S_FFT_data();
 
 	float bass = disco::vReal[2] * 10;
 	for (int y = 0; y < MATRIX_HEIGHT; y++) {
