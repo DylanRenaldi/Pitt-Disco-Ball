@@ -16,4 +16,4 @@ enclosure fusion360 3d project file & enclosure component .stl files
 ![Alt Text](https://github.com/DylanRenaldi/Pitt-Disco-Ball/blob/main/enclosure/images/bottom.png)
 
 # Back Mesh of Enclosure
-![Alt Text](https://github.com/DylanRenaldi/Pitt-Disco-Ball/blob/main/enclosure/images/mesh.png)
+![Alt Text](https://github.com/DylanRenaldi/Pitt-Disco-Ball/blob/main/enclosure/images/back-mesh.png)
