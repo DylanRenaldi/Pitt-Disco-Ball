@@ -1,18 +1,18 @@
 
 #pragma once
 
-#include <crgb.h>
+#include <cstdint>
 
 namespace discoModes {
 	
+	void imageFrame(const uint8_t&, bool&);
+	
 	void audioReactiveVisualizer();
+	void waveSpectrumVisualizer();
 	void lowFrequencyPulseSync();
 	void solidColorFill();
 	void energySnake();
-	void rippleBeat();
+	void fireMatrix();
 	void colorWave();
 	void fireGlow();
-	
-	inline struct CRGB peakColor = CRGB::White;
-	
 }
