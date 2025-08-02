@@ -1,36 +1,44 @@
 
 #pragma once
 
-#include "disco_peripherals.h"
+#include "discoPeripherals.h"
+#include "discoModes.hpp"
 
 #include <BluetoothSerial.h>
 #include <arduinoFFT.h>
 #include <crgb.h>
 
-// encapsulation ftw
+// disco main modules (encapsulation ftw)
 namespace disco {
+	
+	inline uint8_t mode = 3;
+	inline uint8_t brightness = 10;
 
 	void init();
-	void show();
-
-	void checkBluetooth(const uint8_t&, const uint8_t&);
-	void readBluetooth(uint8_t&, const bool);
+	
+	void setColorProfile(struct CRGB, const struct CRGB&);
+	void update(const uint8_t&, bool&);
 	void debounceButtons(const uint8_t&);
-	void setGradient(CRGB, CRGB);
+	void checkBluetooth(const uint8_t&);
+	void readBluetooth(bool&, bool);
 	void I2S_FFT_data();
 	
 	bool frameInterval(uint8_t&);
 
 	//etc.
+}
 
+// discolamp (variables) objects, variables, arrays, etc.
+namespace dlv {
 
 	// will error and not compile if these aren't inline (One Definition Rule error for some reason)
 	inline double vReal[SAMPLES];
 	inline double vImag[SAMPLES];
 
 	inline BluetoothSerial ESP_BT;
-
-	inline CRGB gradient[MATRIX_HEIGHT];
+	
+	inline struct CRGB peakColor = CRGB::Magenta;
+	inline CRGB colorProfile[MATRIX_HEIGHT];
 	inline CRGB leds[NUM_LEDS];
 	
 	inline ArduinoFFT<double> FFT;
@@ -70,4 +78,4 @@ namespace disco {
 		{270, 273, 302, 305, 334, 337, 366, 369, 398, 401, 430, 433, 462, 465, 494, 497, 526, 529, 558, 561, 590, 593, 622, 625, 654, 657, 686, 689, 718, 721,  750,  753},
 		{271, 272, 303, 304, 335, 336, 367, 368, 399, 400, 431, 432, 463, 464, 495, 496, 527, 528, 559, 560, 591, 592, 623, 624, 655, 656, 687, 688, 719, 720,  751,  752},
 	};
-};
+}
