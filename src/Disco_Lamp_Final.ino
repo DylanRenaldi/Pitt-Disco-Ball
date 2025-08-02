@@ -4,25 +4,8 @@
 #include <math.h>
 #include "BluetoothSerial.h"       // Bluetooth communication for control
 #include <vector>  
-
-// =============================================================================
-// Matrix & Audio Settings
-// =============================================================================
-
-#define MATRIX_WIDTH      16      // Width of LED panel
-#define MATRIX_HEIGHT     16      // Height of LED panel
-#define NUM_LEDS          (MATRIX_WIDTH * MATRIX_HEIGHT)  // Total number of LEDs
-#define DATA_PIN          5       // Pin connected to the LED strip
-#define SAMPLES           512     // Quantity of Samples
-#define SAMPLING_FREQ     48000   // Sampling Frequency (center frequency is SAMPLING_FREQ / 2)
-#define BLUETOOTH_LED     27
-#define I2S_WS                25      // Word Select (LRCLK)
-#define I2S_SD                33      // Serial Data input
-#define I2S_SCK               26      // Bit Clock (BCLK)
-#define INCREASE_BRIGHTNESS   17
-#define DECREASE_BRIGHTNESS   16
-#define BLUETOOTH_LED         27
-
+#include <disco.hpp>
+#include "disco_peripherals.h"
 
 // =============================================================================
 // Global Variables
