@@ -132,16 +132,8 @@ void disco::readBluetooth(bool& update, bool debug) {
 		FastLED.clear();
 	}
 
-
-	if (debug) {
-		Serial.printf("\nRGB1(%i,%i,%i), RGB2(%i,%i,%i), mode = %i, brightness = %i\n", RGB1[0],RGB1[1],RGB1[2], RGB2[0],RGB2[1],RGB2[2], disco::mode, disco::brightness); 
-	}
-
 	// set gradient if gradient bounds are different
 	if(RGB1 != dlv::colorProfile[0] || RGB2 != dlv::colorProfile[MATRIX_HEIGHT - 1]) {
-		if (debug) {
-			Serial.println("gradient updated");
-		}
 		disco::setColorProfile(RGB1, RGB2);
 	}
 
@@ -149,13 +141,20 @@ void disco::readBluetooth(bool& update, bool debug) {
 	while (dlv::ESP_BT.available()) dlv::ESP_BT.read();       // ignore extra data if an update was sent too quickly
 }
 
-void disco::debounceButtons(const uint8_t &diff) {
+void disco::debounceButtons(const uint8_t& diff, bool& update) {
 
 	static uint8_t debounce = 0;
 
 	if(!debounce) {
 		uint8_t b = disco::brightness;
-		if(digitalRead(INCREASE_BRIGHTNESS) && b < 100)    // GPIO17
+		if (digitalRead(INCREASE_BRIGHTNESS) && digitalRead(DECREASE_BRIGHTNESS)) {
+			update = true;
+			FastLED.clear();
+			debounce = 250;
+			disco::mode = (disco::mode%9) + 1;
+		}
+		
+		else if(digitalRead(INCREASE_BRIGHTNESS) && b < 100)    // GPIO17
 			FastLED.setBrightness(++b);
 
 		else if (digitalRead(DECREASE_BRIGHTNESS) && b)    // GPIO16
@@ -235,4 +234,5 @@ void disco::I2S_FFT_data() {
 	dlv::FFT.compute(FFTDirection::Forward);
 	dlv::FFT.complexToMagnitude();
 }
+
 
