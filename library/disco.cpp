@@ -225,7 +225,7 @@ void disco::I2S_FFT_data() {
 	for (uint16_t i = 0, samples_read = bytes_read / sizeof(int32_t); i < samples_read; ++i) {
 		// peak amplitude
 		// vReal[i] = samples[i] / double((1 << 31) - 1);
-		dlv::vReal[i] = (samples[i] >> 14) / 2048;
+		dlv::vReal[i] = (samples[i] >> 14) / 2048.0;
 		dlv::vImag[i] = 0; // set to 0 to avoid erroneous errors and overflow
 	}
 
@@ -234,5 +234,6 @@ void disco::I2S_FFT_data() {
 	dlv::FFT.compute(FFTDirection::Forward);
 	dlv::FFT.complexToMagnitude();
 }
+
 
 
