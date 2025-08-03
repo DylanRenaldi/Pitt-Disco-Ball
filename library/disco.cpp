@@ -64,25 +64,23 @@ void disco::update(const uint8_t& diff, bool& update) {
 		case 3: discoModes::audioReactiveVisualizer();
 			break;
 			
-		case 4: discoModes::waveSpectrumVisualizer();
-			//discoModes::lowFrequencyPulseSync();
+		case 4: discoModes::lowFrequencyPulseSync();
 			break;
 		
 		case 5: discoModes::fireMatrix();
 			break;
 
-		case 6: discoModes::imageFrame(diff, update);
-			return;
-			//discoModes::fireGlow();
-			//break;
+		case 6: discoModes::fireGlow();
+			break;
 
 		case 7: discoModes::energySnake();
 			break;
 
-		case 8: discoModes::imageFrame(diff, update);	// calls FastLED.show() when update = true
-			return;		// image is static -> dont need to update each iteration
+		case 8: discoModes::waveSpectrumVisualizer();
+			break;
 
-		case 9: discoModes::waveSpectrumVisualizer();
+		case 9: discoModes::imageFrame(diff, update);	// calls FastLED.show() when update = true
+			return;		// image is static -> dont need to update each iteration
 	}
 	
 	FastLED.show();
@@ -237,3 +235,4 @@ void disco::I2S_FFT_data() {
 	dlv::FFT.compute(FFTDirection::Forward);
 	dlv::FFT.complexToMagnitude();
 }
+
