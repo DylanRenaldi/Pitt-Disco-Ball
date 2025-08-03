@@ -18,7 +18,7 @@ namespace disco {
 	
 	void setColorProfile(struct CRGB, const struct CRGB&);
 	void update(const uint8_t&, bool&);
-	void debounceButtons(const uint8_t&);
+	void debounceButtons(const uint8_t&, bool&);
 	void checkBluetooth(const uint8_t&);
 	void readBluetooth(bool&, bool);
 	void I2S_FFT_data();
@@ -79,3 +79,4 @@ namespace dlv {
 		{271, 272, 303, 304, 335, 336, 367, 368, 399, 400, 431, 432, 463, 464, 495, 496, 527, 528, 559, 560, 591, 592, 623, 624, 655, 656, 687, 688, 719, 720,  751,  752},
 	};
 }
+
