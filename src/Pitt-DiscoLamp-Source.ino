@@ -29,7 +29,7 @@ void loop() {
   static uint8_t diff = 0;
   static bool update = false;
   if (disco::frameInterval(diff)) return;
-  disco::debounceButtons(diff);
+  disco::debounceButtons(diff, update);
 
   // ---------------------------------------
   // Check if Bluetooth is connected to display the Bluetooth LED
