@@ -328,12 +328,15 @@ void discoModes::waveSpectrumVisualizer() {
 		// upper: (16 + 1 - 1 -> 16), (16 + 16 - 1 -> 31)  -> {16, 31}
 
 		// Draw vertical bar (starting 1 because height map is 1-offset)
-		for (int index = lower; index <= upper; ++index) {
-			setxyLEDColor(flippedBand, index, CRGB::Aqua);
+		for (int ci,index = lower; index <= upper; ++index) {
+			ci = abs(index - (MATRIX_HEIGHT >> 1)) - (index < 16);
+			setxyLEDColor(flippedBand, index, dlv::colorProfile[ci << 1]);
+			// setxyLEDColor(flippedBand, index, CRGB::Aqua);
 		}
 
-		// Draw peak marker
-		setxyLEDColor(flippedBand, upper, CRGB::Magenta);
-		setxyLEDColor(flippedBand, lower, CRGB::LawnGreen);
+		// Draw peak marker (after drawing spectrum line)
+		setxyLEDColor(flippedBand, upper, CRGB::Magenta); // CRGB::Magenta);
+		setxyLEDColor(flippedBand, lower, CRGB::Magenta); // CRGB::LawnGreen);
 	}
 }
+
